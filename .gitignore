@@ -1,0 +1,67 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+venv/
+env/
+
+# Streamlit secrets and sensitive files
+.streamlit/secrets.toml
+*.env
+.env.*
+secrets/
+api_keys.txt
+config.ini
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+logs/
+temp/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing and coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# UV specific
+uv.lock
+
+# Tennis Predictor Pro specific
+user_data/
+backtest_results/
+model_exports/
+betting_logs/
+
+# Note: API keys are in .streamlit/secrets.toml - DO NOT COMMIT!
