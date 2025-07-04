@@ -5,6 +5,8 @@
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://streamlit.io)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/yourusername/tennis-predictor/actions/workflows/tests.yml/badge.svg)](https://github.com/yourusername/tennis-predictor/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/yourusername/tennis-predictor/graph/badge.svg?token=YOUR-TOKEN)](https://codecov.io/gh/yourusername/tennis-predictor)
 
 ## 🚀 Features
 
@@ -18,6 +20,129 @@
 - Integration with The Odds API for real-time data
 - Interactive Plotly visualizations
 - Comprehensive market analysis
+
+## 🛠️ Setup and Installation
+
+### Prerequisites
+- Python 3.8+
+- pip (Python package manager)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/tennis-predictor.git
+   cd tennis-predictor
+   ```
+
+2. **Create and activate a virtual environment**
+   ```bash
+   # On macOS/Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   
+   # On Windows
+   python -m venv venv
+   .\venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set up environment variables**
+   Create a `.env` file in the root directory and add your API key:
+   ```
+   ODDS_API_KEY=your_api_key_here
+   ENVIRONMENT=development
+   ```
+
+## 🚀 Running the Application
+
+### Development Mode
+```bash
+streamlit run app.py
+```
+
+### Production Mode
+```bash
+python -m streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+```
+
+## 🧪 Running Tests
+
+### Install test dependencies
+```bash
+pip install -r requirements-test.txt
+```
+
+### Run all tests
+```bash
+pytest -v --cov=app tests/
+```
+
+### Run specific test files
+```bash
+pytest tests/test_utils.py -v
+pytest tests/test_models.py -v
+pytest tests/test_ui.py -v
+pytest tests/test_integration.py -v
+```
+
+### Generate coverage report
+```bash
+pytest --cov=app --cov-report=html tests/
+open htmlcov/index.html  # View the coverage report
+```
+
+## 🏗️ Project Structure
+
+```
+tennis-predictor/
+├── app.py                 # Main application file
+├── requirements.txt       # Production dependencies
+├── requirements-test.txt  # Test dependencies
+├── setup.py              # Package configuration
+├── tests/                # Test files
+│   ├── conftest.py       # Test fixtures
+│   ├── test_utils.py     # Utility function tests
+│   ├── test_models.py    # Model tests
+│   ├── test_ui.py        # UI component tests
+│   └── test_integration.py # Integration tests
+└── .github/workflows/    # GitHub Actions workflows
+    └── tests.yml         # CI/CD pipeline
+```
+
+## 🤝 Contributing
+
+1. **Fork** the repository
+2. Create a new branch: `git checkout -b feature/your-feature-name`
+3. Make your changes and commit them: `git commit -m 'Add some feature'`
+4. Push to the branch: `git push origin feature/your-feature-name`
+5. Open a **Pull Request**
+
+### Code Style
+- Follow [PEP 8](https://www.python.org/dev/peps/pep-0008/) style guide
+- Use type hints for better code clarity
+- Write docstrings for all public functions and classes
+- Keep functions small and focused on a single responsibility
+
+### Testing Guidelines
+- Write tests for all new features and bug fixes
+- Aim for at least 80% test coverage
+- Use descriptive test function names
+- Mock external API calls in tests
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📝 Notes
+
+- The application uses The Odds API for live odds data (API key required)
+- All odds and predictions are for informational purposes only
+- Betting laws vary by jurisdiction - please ensure compliance with local regulations
 - AEST (Brisbane) timezone support
 - Auto-refresh functionality
 

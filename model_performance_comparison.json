@@ -1,0 +1,20 @@
+{
+  "ensemble": {
+    "train_accuracy": 0.98625,
+    "test_accuracy": 0.936,
+    "cv_mean": 0.925,
+    "cv_std": 0.011401754250991405
+  },
+  "random_forest": {
+    "train_accuracy": 1.0,
+    "test_accuracy": 0.907,
+    "cv_mean": 0.89975,
+    "cv_std": 0.010380269746013358
+  },
+  "gradient_boost": {
+    "train_accuracy": 1.0,
+    "test_accuracy": 0.911,
+    "cv_mean": 0.8895,
+    "cv_std": 0.00934077084613474
+  }
+}

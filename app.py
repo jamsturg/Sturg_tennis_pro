@@ -50,6 +50,98 @@ class BasicModel:
         # Return numpy array for compatibility
         return np.array(results)
 
+# Enhanced Tennis Model class (for loading saved enhanced models)
+class EnhancedTennisModel:
+    """
+    Advanced tennis prediction model with enhanced features and ensemble methods
+    """
+    
+    def __init__(self, model_type='ensemble'):
+        self.model_type = model_type
+        self.feature_names = [
+            'serve_strength_diff', 'ranking_diff', 'serve_percentage_diff',
+            'recent_form_diff', 'rally_performance_diff', 'h2h_advantage',
+            'surface_advantage', 'fatigue_index', 'pressure_handling',
+            'injury_status', 'weather_impact', 'motivation_level'
+        ]
+        self.classes_ = [0, 1]
+        self.n_features_in_ = len(self.feature_names)
+        
+        # Initialize model and scaler
+        self.model = None
+        self.scaler = None
+        self.feature_importance = None
+        
+        # Lazy load StandardScaler to avoid import issues
+        self._init_scaler()
+    
+    def _init_scaler(self):
+        """Lazily initialize the StandardScaler to avoid import issues."""
+        if self.scaler is None:
+            try:
+                from sklearn.preprocessing import StandardScaler
+                self.scaler = StandardScaler()
+            except ImportError:
+                # Fallback to a simple scaler if scikit-learn is not available
+                class SimpleScaler:
+                    def fit(self, X):
+                        self.mean_ = np.mean(X, axis=0) if len(X) > 0 else 0
+                        self.scale_ = np.std(X, axis=0)
+                        self.scale_[self.scale_ == 0] = 1.0  # Avoid division by zero
+                        return self
+                        
+                    def transform(self, X):
+                        if not hasattr(self, 'mean_') or not hasattr(self, 'scale_'):
+                            raise ValueError("Scaler has not been fitted yet")
+                        return (X - self.mean_) / self.scale_
+                            
+                    def fit_transform(self, X):
+                        return self.fit(X).transform(X)
+                        
+                self.scaler = SimpleScaler()
+        
+    def predict(self, X):
+        """Predict class labels"""
+        if self.model is None:
+            raise ValueError("Model not trained yet")
+        
+        # Handle single sample
+        if len(X.shape) == 1:
+            X = X.reshape(1, -1)
+        
+        # Ensure we have all features
+        if X.shape[1] < self.n_features_in_:
+            # Pad with zeros for missing features
+            missing_features = self.n_features_in_ - X.shape[1]
+            X = np.pad(X, ((0, 0), (0, missing_features)), mode='constant')
+        elif X.shape[1] > self.n_features_in_:
+            # Trim extra features
+            X = X[:, :self.n_features_in_]
+        
+        X_scaled = self.scaler.transform(X)
+        return self.model.predict(X_scaled)
+    
+    def predict_proba(self, X):
+        """Predict class probabilities"""
+        if self.model is None:
+            raise ValueError("Model not trained yet")
+        
+        # Handle single sample
+        if len(X.shape) == 1:
+            X = X.reshape(1, -1)
+        
+        # Ensure we have all features
+        if X.shape[1] < self.n_features_in_:
+            # Pad with zeros for missing features
+            missing_features = self.n_features_in_ - X.shape[1]
+            X = np.pad(X, ((0, 0), (0, missing_features)), mode='constant')
+        elif X.shape[1] > self.n_features_in_:
+            # Trim extra features
+            X = X[:, :self.n_features_in_]
+        
+        X_scaled = self.scaler.transform(X)
+        return self.model.predict_proba(X_scaled)
+
 st.set_page_config(
     page_title="🎾 Tennis Predictor",
     page_icon="🎾",
@@ -58,8 +150,10 @@ st.set_page_config(
 )
 
 # --- API Configuration ---
-API_KEY = st.secrets.get("api", {}).get("odds_api_key")
+# Use the provided API key directly
+API_KEY = "e2288482c983cc9b0b8f88e40eff7876"
 BASE_URL = "https://api.the-odds-api.com"
+PLAYER_DATA_API_URL = "http://localhost:5000/api/player_features" # URL for the new Flask API
 
 # --- Model Loading ---
 MODEL_PATH = "trained_model.joblib"
@@ -180,47 +274,128 @@ def process_odds_data(odds_json):
     return pd.DataFrame(records)
 
 def prepare_features(player1_name, player2_name, player1_odds, player2_odds):
-    """Generates features for the model prediction."""
-    # Placeholder values for features not derivable from current inputs
-    serve_strength_diff = 0.0
-    ranking_diff = 0.0
-    serve_percentage_diff = 0.0
-    recent_form_diff = 0.0 # Placeholder, as we don't have historical data for arbitrary players
-    rally_performance_diff = 0.0 # Placeholder, not calculable from current inputs
-    h2h_advantage = 0.0
+    """Generates features for the model prediction by calling the player data API."""
+    try:
+        response = requests.post(
+            PLAYER_DATA_API_URL,
+            json={"player1_name": player1_name, "player2_name": player2_name}
+        )
+        response.raise_for_status() # Raise an exception for HTTP errors
+        features_data = response.json()
 
-    # The model expects features in a specific order. Ensure this matches your trained model's expectations.
-    # Assuming the model was trained on features in this order:
-    # ['serve_strength_diff', 'ranking_diff', 'serve_percentage_diff', 'recent_form_diff', 'rally_performance_diff', 'h2h_advantage']
-    features = np.array([[serve_strength_diff, ranking_diff, serve_percentage_diff, recent_form_diff, rally_performance_diff, h2h_advantage]])
-    return features
+        # The model expects features in a specific order. Ensure this matches your trained model's expectations.
+        # ['serve_strength_diff', 'ranking_diff', 'serve_percentage_diff', 'recent_form_diff', 'rally_performance_diff', 'h2h_advantage']
+        features = np.array([[
+            features_data.get('serve_strength_diff', 0.0),
+            features_data.get('ranking_diff', 0.0),
+            features_data.get('serve_percentage_diff', 0.0),
+            features_data.get('recent_form_diff', 0.0),
+            features_data.get('rally_performance_diff', 0.0),
+            features_data.get('h2h_advantage', 0.0)
+        ]])
+        return features
+
+    except requests.exceptions.ConnectionError:
+        st.error("❌ Could not connect to the Player Data API. Please ensure it is running (e.g., `python player_data_api.py`).")
+        # Fallback to placeholder values if API is not reachable
+        return np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Error fetching player features from API: {e}")
+        # Fallback to placeholder values on other API errors
+        return np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    except Exception as e:
+        st.error(f"An unexpected error occurred during feature preparation: {e}")
+        return np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
 
 def convert_odds_to_probability(odds):
-    """Converts decimal odds to implied probability."""
-    if odds == 0:
+    """Converts decimal odds to implied probability.
+    
+    Args:
+        odds (float): Decimal odds (must be >= 1.0)
+        
+    Returns:
+        float: Implied probability between 0 and 1
+        
+    Raises:
+        ValueError: If odds is less than 1.0
+    """
+    if not isinstance(odds, (int, float)):
+        raise ValueError("Odds must be a number")
+        
+    if odds < 1.0:
+        raise ValueError("Odds must be >= 1.0")
+        
+    if odds == float('inf'):
         return 0.0
-    return 1 / odds
+        
+    return 1.0 / float(odds)
 
 def kelly_criterion(bankroll, win_probability, decimal_odds):
-    """Calculates the Kelly Criterion bet fraction and amount."""
-    if decimal_odds <= 1.0:
-        return 0.0, 0.0, "Odds must be greater than 1.0"
+    """Calculates the Kelly Criterion bet fraction and amount.
     
-    b = decimal_odds - 1.0  # Decimal odds minus 1
-    p = win_probability     # Probability of winning
-    q = 1.0 - p             # Probability of losing
-
-    if b <= 0:
-        return 0.0, 0.0, "Odds must be greater than 1.0"
-
-    expected_value = (b * p) - q
+    Args:
+        bankroll (float): Current available bankroll
+        win_probability (float): Estimated probability of winning (0.0 to 1.0)
+        decimal_odds (float): Decimal odds offered by the bookmaker (must be > 1.0)
+        
+    Returns:
+        tuple: (fraction, amount, message)
+            - fraction (float): Fraction of bankroll to bet (0.0 to 1.0)
+            - amount (float): Absolute amount to bet
+            - message (str): Human-readable recommendation
+            
+    Raises:
+        ValueError: If inputs are invalid
+    """
+    # Input validation
+    if not all(isinstance(x, (int, float)) for x in [bankroll, win_probability, decimal_odds]):
+        raise ValueError("All inputs must be numbers")
+        
+    if bankroll <= 0:
+        return 0.0, 0.0, "Bankroll must be positive"
+        
+    if not (0.0 <= win_probability <= 1.0):
+        return 0.0, 0.0, "Win probability must be between 0 and 1"
+        
+    if decimal_odds <= 1.0:
+        return 0.0, 0.0, "Decimal odds must be greater than 1.0"
+    
+    # Calculate Kelly criterion
+    b = decimal_odds - 1.0  # Net decimal odds (what you win on a 1 unit bet)
+    q = 1.0 - win_probability  # Probability of losing
+    
+    # Expected value of the bet
+    expected_value = (b * win_probability) - q
+    
+    # If expected value is not positive, don't bet
     if expected_value <= 0:
         return 0.0, 0.0, "Negative expected value. Do not bet."
-
+    
+    # Kelly fraction
     f = expected_value / b
-    bet_amount = f * bankroll
-    return f, bet_amount, None
-
+    
+    # Full Kelly might be too aggressive, so we'll use half-Kelly as a safer approach
+    f = f * 0.5
+    
+    # Calculate bet amount
+    bet_amount = bankroll * f
+    
+    # Ensure bet amount is within reasonable bounds
+    bet_amount = max(0.0, min(bet_amount, bankroll))
+    
+    # If the bet amount is too small (less than 1 unit), don't bet
+    # But only if the bankroll is large enough that this would be a tiny fraction
+    if bet_amount < 1.0 and bankroll > 10.0:  # Only skip if bankroll is > 10
+        return 0.0, 0.0, "Bet amount too small to be meaningful"
+    elif bet_amount < 1.0:
+        # For very small bankrolls, just bet the minimum 1 unit if we have a positive edge
+        bet_amount = 1.0 if bankroll >= 1.0 else bankroll
+    
+    return (
+        f,  # Fraction of bankroll
+        bet_amount,  # Absolute amount
+        f"Recommended bet: ${bet_amount:.2f} ({f*100:.1f}% of bankroll) - Edge: {expected_value*100:.1f}%"
+    )
 
 def run_enhanced_backtest(data, model_obj, initial_bankroll=1000, strategy="kelly"):
     """Enhanced backtesting with multiple strategies and detailed analytics."""
@@ -444,19 +619,35 @@ st.markdown("***AI-Powered Tennis Match Analysis & Prediction System***")
 st.sidebar.title("🎾 Tennis Predictor Pro")
 st.sidebar.markdown("---")
 selection = st.sidebar.radio(
-    "Navigation", 
-    ['🏠 Dashboard', '📊 Live Odds & Analysis', '🔮 Match Predictions', '🎯 Multi-Bet & Parlays', '💰 Bankroll & Strategy', '🧠 Model Management', '🤖 AI Automation']
+    "Navigation",
+    ['🏠 Dashboard', '📊 Live Odds & Analysis', '🔮 Match Predictions', '🎯 Multi-Bet & Parlays', '💰 Bankroll & Strategy', '🧠 Model Management', '🤖 AI Automation', '🏓 Table Tennis Predictor']
 )
 
 # Utility Functions for Enhanced Features
 def convert_to_aest(utc_time_str):
-    """Convert UTC time to AEST (Brisbane time)"""
+    """Convert UTC time to AEST (Brisbane time)
+    
+    Args:
+        utc_time_str (str): UTC time string in ISO format (e.g., '2023-01-01T12:00:00Z')
+        
+    Returns:
+        str: Formatted datetime string in AEST timezone or None if conversion fails
+    """
     try:
-        utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+        if not utc_time_str:
+            return None
+            
+        # Handle both 'Z' and '+00:00' timezone formats
+        if utc_time_str.endswith('Z'):
+            utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+        else:
+            utc_time = datetime.fromisoformat(utc_time_str)
+            
         aest_tz = pytz.timezone('Australia/Brisbane')
         aest_time = utc_time.astimezone(aest_tz)
-        return aest_time
-    except:
+        return aest_time.strftime('%Y-%m-%d %H:%M:%S %Z')
+    except (ValueError, AttributeError, TypeError) as e:
+        print(f"Error converting time: {e}")
         return None
 
 def get_matches_with_autocomplete(odds_data):
@@ -477,17 +668,113 @@ def get_matches_with_autocomplete(odds_data):
     return matches
 
 def create_odds_visualization(odds_df):
-    """Create interactive visualizations for odds data"""
-    if odds_df.empty:
-        return None
+    """Create interactive visualizations for odds data
     
-    # Create odds comparison chart
-    fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=('Home vs Away Odds', 'Odds Distribution', 'Bookmaker Comparison', 'Time Analysis'),
-        specs=[[{"secondary_y": False}, {"secondary_y": False}],
-               [{"secondary_y": False}, {"secondary_y": False}]]
-    )
+    Args:
+        odds_df (pd.DataFrame): DataFrame containing match odds data with either:
+            - 'player1', 'player2', 'player1_odds', 'player2_odds' columns OR
+            - 'Home Team', 'Away Team', 'Home Odds', 'Away Odds' columns
+            
+    Returns:
+        plotly.graph_objects.Figure: Interactive visualization figure
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    # Handle empty or None input
+    if odds_df is None or odds_df.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            title="No odds data available",
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            annotations=[{
+                "text": "No odds data available to display",
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+                "font": {"size": 16}
+            }]
+        )
+        return fig
+    
+    # Make a copy to avoid modifying the original dataframe
+    odds_df = odds_df.copy()
+    
+    # Handle different column name conventions
+    if 'player1' in odds_df.columns and 'player1_odds' in odds_df.columns:
+        odds_df = odds_df.rename(columns={
+            'player1': 'Home Team',
+            'player2': 'Away Team',
+            'player1_odds': 'Home Odds',
+            'player2_odds': 'Away Odds'
+        })
+    
+    # Ensure required columns exist with numeric odds
+    required_columns = ['Home Team', 'Away Team', 'Home Odds', 'Away Odds']
+    if not all(col in odds_df.columns for col in required_columns):
+        fig = go.Figure()
+        fig.update_layout(
+            title="Incomplete odds data",
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            annotations=[{
+                "text": "Required columns not found in data",
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+                "font": {"size": 16}
+            }]
+        )
+        return fig
+        
+    # Ensure odds are numeric
+    for col in ['Home Odds', 'Away Odds']:
+        odds_df[col] = pd.to_numeric(odds_df[col], errors='coerce')
+    
+    # Drop rows with missing odds
+    odds_df = odds_df.dropna(subset=['Home Odds', 'Away Odds'])
+    
+    # If no valid rows left after cleaning
+    if odds_df.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            title="No valid odds data",
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            annotations=[{
+                "text": "No valid odds data to display",
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+                "font": {"size": 16}
+            }]
+        )
+        return fig
+    
+    # Create odds comparison chart with error handling
+    try:
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('Home vs Away Odds', 'Odds Distribution', 'Bookmaker Comparison', 'Time Analysis'),
+            specs=[[{"secondary_y": False}, {"secondary_y": False}],
+                   [{"secondary_y": False}, {"secondary_y": False}]]
+        )
+    except Exception as e:
+        fig = go.Figure()
+        fig.update_layout(
+            title="Error creating visualization",
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            annotations=[{
+                "text": f"Error creating visualization: {str(e)[:100]}",
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+                "font": {"size": 14}
+            }]
+        )
+        return fig
     
     # Odds comparison scatter
     fig.add_trace(
@@ -512,19 +799,112 @@ def create_odds_visualization(odds_df):
         row=1, col=2
     )
     
-    # Bookmaker comparison
-    bookmaker_avg = odds_df.groupby('Bookmaker')[['Home Odds', 'Away Odds']].mean().reset_index()
-    fig.add_trace(
-        go.Bar(x=bookmaker_avg['Bookmaker'], y=bookmaker_avg['Home Odds'], name='Avg Home Odds'),
-        row=2, col=1
-    )
-    fig.add_trace(
-        go.Bar(x=bookmaker_avg['Bookmaker'], y=bookmaker_avg['Away Odds'], name='Avg Away Odds'),
-        row=2, col=1
-    )
+    # Bookmaker comparison (if bookmaker data is available)
+    if 'Bookmaker' in odds_df.columns and not odds_df['Bookmaker'].empty:
+        bookmaker_avg = odds_df.groupby('Bookmaker')[['Home Odds', 'Away Odds']].mean().reset_index()
+        fig.add_trace(
+            go.Bar(x=bookmaker_avg['Bookmaker'], y=bookmaker_avg['Home Odds'], name='Avg Home Odds'),
+            row=2, col=1
+        )
     
-    fig.update_layout(height=800, showlegend=True, title_text="Comprehensive Odds Analysis")
-    return fig
+    # Add a placeholder if no bookmaker data
+    else:
+        fig.add_annotation(
+            row=2, col=1,
+            text="No bookmaker data available",
+            showarrow=False,
+            font=dict(size=12)
+        )
+    
+    # Time analysis (if time data is available)
+    if 'commence_time' in odds_df.columns and not odds_df['commence_time'].empty:
+        try:
+            # Convert commence_time to datetime if it's not already
+            if not pd.api.types.is_datetime64_any_dtype(odds_df['commence_time']):
+                odds_df['commence_time'] = pd.to_datetime(odds_df['commence_time'])
+            
+            # Add time series of odds
+            fig.add_trace(
+                go.Scatter(
+                    x=odds_df['commence_time'],
+                    y=odds_df['Home Odds'],
+                    mode='lines+markers',
+                    name='Home Odds Over Time',
+                    line=dict(color='blue')
+                ),
+                row=2, col=2
+            )
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=odds_df['commence_time'],
+                    y=odds_df['Away Odds'],
+                    mode='lines+markers',
+                    name='Away Odds Over Time',
+                    line=dict(color='red')
+                ),
+                row=2, col=2
+            )
+        except Exception as e:
+            print(f"Error creating time analysis: {e}")
+            # Add a placeholder if time analysis fails
+            fig.add_annotation(
+                row=2, col=2,
+                text="Time analysis not available",
+                showarrow=False,
+                font=dict(size=12)
+            )
+    else:
+        # Add a placeholder if no time data
+        fig.add_annotation(
+            row=2, col=2,
+            text="No time data available",
+            showarrow=False,
+            font=dict(size=12)
+        )
+    
+    # Update layout with error handling
+    try:
+        fig.update_layout(
+            height=800,
+            showlegend=True,
+            title_text="Tennis Match Odds Analysis",
+            hovermode='closest',
+            margin=dict(l=50, r=50, t=100, b=100)
+        )
+        
+        # Update axis labels
+        fig.update_xaxes(title_text="Home Odds", row=1, col=1)
+        fig.update_yaxes(title_text="Away Odds", row=1, col=1)
+        fig.update_xaxes(title_text="Odds Value", row=1, col=2)
+        fig.update_yaxes(title_text="Count", row=1, col=2)
+        
+        if 'Bookmaker' in odds_df.columns and not odds_df['Bookmaker'].empty:
+            fig.update_xaxes(title_text="Bookmaker", row=2, col=1)
+            fig.update_yaxes(title_text="Average Odds", row=2, col=1)
+        
+        if 'commence_time' in odds_df.columns and not odds_df['commence_time'].empty:
+            fig.update_xaxes(title_text="Time", row=2, col=2)
+            fig.update_yaxes(title_text="Odds", row=2, col=2)
+        
+        return fig
+        
+    except Exception as e:
+        # Return a simple figure with the error message if layout update fails
+        error_fig = go.Figure()
+        error_fig.update_layout(
+            title="Error in visualization",
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            annotations=[{
+                "text": f"Error updating layout: {str(e)[:100]}",
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+                "font": {"size": 14}
+            }]
+        )
+        return error_fig
 
 # Auto-refresh functionality
 if 'last_refresh' not in st.session_state:
@@ -1290,17 +1670,68 @@ elif selection == '🎯 Multi-Bet & Parlays':
             kelly_fraction = st.slider("🎯 Kelly Fraction", min_value=0.1, max_value=1.0, value=0.25, step=0.05)
         
         if st.button("💎 Calculate Optimal Parlay Bet"):
-            if parlay_type == "Sure Thing Parlay" and selected_sure_bets:
-                st.success(f"🔒 **{parlay_type}** calculated!")
-                st.write(f"**Recommended Stake:** ${stake * kelly_fraction:.2f}")
-                st.write(f"**Potential Payout:** ${stake * total_odds:.2f}")
-                st.write(f"**Potential Profit:** ${stake * (total_odds - 1):.2f}")
+            if parlay_type == "Sure Thing Parlay":
+                if 'sure_things' in st.session_state and st.session_state.sure_things:
+                    selected_sure_bets = [bet for bet in st.session_state.sure_things if bet.get('selected', False)]
+                    if selected_sure_bets:
+                        total_odds = 1.0
+                        total_prob = 1.0
+                        for bet in selected_sure_bets:
+                            total_odds *= bet.get('odds', 1.0)
+                            total_prob *= bet.get('probability', 0.0)
+                        
+                        st.success(f"🔒 **{parlay_type}** calculated!")
+                        st.write(f"**Recommended Stake:** ${stake * kelly_fraction:.2f}")
+                        st.write(f"**Potential Payout:** ${stake * total_odds:.2f}")
+                        st.write(f"**Potential Profit:** ${stake * (total_odds - 1):.2f}")
+                        st.write(f"**Combined Probability:** {total_prob*100:.1f}%")
+                    else:
+                        st.warning("Please select at least one 'Sure Thing' bet first.")
+                else:
+                    st.warning("No 'Sure Things' available. Please analyze matches first.")
+                    
+            elif parlay_type == "Value Bet Parlay":
+                if 'value_bets' in st.session_state and st.session_state.value_bets:
+                    selected_value_bets = [bet for bet in st.session_state.value_bets if bet.get('selected', False)]
+                    if selected_value_bets:
+                        total_odds = 1.0
+                        total_prob = 1.0
+                        for bet in selected_value_bets:
+                            total_odds *= bet.get('odds', 1.0)
+                            total_prob *= bet.get('probability', 0.0)
+                        
+                        st.success(f"💎 **{parlay_type}** calculated!")
+                        st.write(f"**Recommended Stake:** ${stake * kelly_fraction:.2f}")
+                        st.write(f"**Potential Payout:** ${stake * total_odds:.2f}")
+                        st.write(f"**Expected Value:** ${(total_prob * total_odds - 1) * stake * kelly_fraction:.2f}")
+                        st.write(f"**Combined Probability:** {total_prob*100:.1f}%")
+                    else:
+                        st.warning("Please select at least one 'Value Bet' first.")
+                else:
+                    st.warning("No 'Value Bets' available. Please analyze matches first.")
+            
+            else:  # Mixed Parlay
+                selected_bets = []
+                if 'sure_things' in st.session_state:
+                    selected_bets.extend([bet for bet in st.session_state.sure_things if bet.get('selected', False)])
+                if 'value_bets' in st.session_state:
+                    selected_bets.extend([bet for bet in st.session_state.value_bets if bet.get('selected', False)])
                 
-            elif parlay_type == "Value Bet Parlay" and selected_value_bets:
-                st.success(f"💎 **{parlay_type}** calculated!")
-                st.write(f"**Recommended Stake:** ${stake * kelly_fraction:.2f}")
-                st.write(f"**Potential Payout:** ${stake * total_odds:.2f}")
-                st.write(f"**Expected Value:** ${(total_prob * total_odds - 1) * stake:.2f}")
+                if selected_bets:
+                    total_odds = 1.0
+                    total_prob = 1.0
+                    for bet in selected_bets:
+                        total_odds *= bet.get('odds', 1.0)
+                        total_prob *= bet.get('probability', 0.0)
+                    
+                    st.success(f"🎯 **Mixed Parlay** calculated!")
+                    st.write(f"**Number of Selections:** {len(selected_bets)}")
+                    st.write(f"**Recommended Stake:** ${stake * kelly_fraction:.2f}")
+                    st.write(f"**Potential Payout:** ${stake * total_odds:.2f}")
+                    st.write(f"**Expected Value:** ${(total_prob * total_odds - 1) * stake * kelly_fraction:.2f}")
+                    st.write(f"**Combined Probability:** {total_prob*100:.1f}%")
+                else:
+                    st.warning("Please select at least one bet from either 'Sure Things' or 'Value Bets'.")
     
     else:
         st.warning("⚠️ No tennis matches available for multi-bet analysis.")
@@ -1722,3 +2153,87 @@ elif selection == '🤖 AI Automation':
     with col4:
         if st.button("🚨 Test All Alerts"):
             st.success("✅ All alert systems tested successfully!")
+
+elif selection == '🏓 Table Tennis Predictor':
+    st.header("🏓 Table Tennis Tournament Predictor (Manual Feature Entry)")
+    st.markdown("Enter feature differences manually to get a prediction from the AI model.")
+
+    st.subheader("📝 Enter Match Feature Details")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        player1_name_tt = st.text_input("Player 1 Name", "Player A", key="tt_player1_name")
+        serve_strength_diff_tt = st.number_input("Serve Strength Difference", min_value=-5.0, max_value=5.0, value=0.0, step=0.01, key="tt_serve_strength_diff")
+        serve_percentage_diff_tt = st.number_input("Serve Percentage Difference", min_value=-1.0, max_value=1.0, value=0.0, step=0.01, key="tt_serve_percentage_diff")
+        rally_performance_diff_tt = st.number_input("Rally Performance Difference", min_value=-1.0, max_value=1.0, value=0.0, step=0.01, key="tt_rally_performance_diff")
+
+    with col2:
+        player2_name_tt = st.text_input("Player 2 Name", "Player B", key="tt_player2_name")
+        ranking_diff_tt = st.number_input("Ranking Difference", min_value=-10000.0, max_value=10000.0, value=0.0, step=1.0, key="tt_ranking_diff")
+        recent_form_diff_tt = st.number_input("Recent Form Difference", min_value=-1.0, max_value=1.0, value=0.0, step=0.01, key="tt_recent_form_diff")
+        h2h_advantage_tt = st.number_input("Head-to-Head Advantage", min_value=-1.0, max_value=1.0, value=0.0, step=0.01, key="tt_h2h_advantage")
+
+    if st.button("🔮 Predict Table Tennis Match", type="primary"):
+        if model:
+            with st.spinner("🧠 AI analyzing table tennis match..."):
+                # For manual entry, we construct the features array directly
+                # Note: The prepare_features function in app.py now calls the Flask API.
+                # For this manual entry section, we are bypassing the API call and
+                # directly using the input values to form the feature array.
+                # This is because the API expects player names to derive features,
+                # but here we are providing the *derived features* directly.
+                
+                # The model expects features in this order:
+                # ['serve_strength_diff', 'ranking_diff', 'serve_percentage_diff', 'recent_form_diff', 'rally_performance_diff', 'h2h_advantage']
+                features_manual = np.array([[
+                    serve_strength_diff_tt,
+                    ranking_diff_tt,
+                    serve_percentage_diff_tt,
+                    recent_form_diff_tt,
+                    rally_performance_diff_tt,
+                    h2h_advantage_tt
+                ]])
+
+                try:
+                    probabilities = model.predict_proba(features_manual)[0]
+                    
+                    player1_win_prob_tt = probabilities[0]
+                    player2_win_prob_tt = probabilities[1]
+                    
+                    st.markdown("---")
+                    st.subheader("🏆 Prediction Results")
+                    
+                    if player1_win_prob_tt > player2_win_prob_tt:
+                        st.success(f"🎯 **PREDICTED WINNER: {player1_name_tt}**")
+                        confidence_tt = player1_win_prob_tt * 100
+                    else:
+                        st.success(f"🎯 **PREDICTED WINNER: {player2_name_tt}**")
+                        confidence_tt = player2_win_prob_tt * 100
+                    
+                    st.progress(confidence_tt / 100)
+                    st.write(f"**Confidence Level: {confidence_tt:.1f}%**")
+                    
+                    col1_res, col2_res, col3_res = st.columns([2, 1, 2])
+                    
+                    with col1_res:
+                        st.metric(
+                            f"🏓 {player1_name_tt}",
+                            f"{player1_win_prob_tt:.1%}",
+                            delta=f"{(player1_win_prob_tt - 0.5)*100:+.1f}pp"
+                        )
+                    
+                    with col2_res:
+                        st.markdown("<h3 style='text-align: center;'>VS</h3>", unsafe_allow_html=True)
+                    
+                    with col3_res:
+                        st.metric(
+                            f"🏓 {player2_name_tt}",
+                            f"{player2_win_prob_tt:.1%}",
+                            delta=f"{(player2_win_prob_tt - 0.5)*100:+.1f}pp"
+                        )
+                    
+                except Exception as e:
+                    st.error(f"❌ Prediction error: {e}")
+        else:
+            st.error("❌ Model not loaded. Cannot generate predictions.")
