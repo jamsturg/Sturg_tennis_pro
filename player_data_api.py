@@ -35,11 +35,26 @@ def before_first_request():
 
 def get_player_rank(player_name, df):
     """Fetches the most recent rank for a given player."""
-    player_matches_winner = df[df['winner_name'] == player_name]
-    player_matches_loser = df[df['loser_name'] == player_name]
+    if df.empty:
+        return np.nan
+        
+    player_matches_winner = df[df.get('winner_name', pd.Series(dtype='object')) == player_name]
+    player_matches_loser = df[df.get('loser_name', pd.Series(dtype='object')) == player_name]
 
-    latest_rank_winner = player_matches_winner.sort_values(by='tourney_date', ascending=False)['winner_rank'].iloc[0] if not player_matches_winner.empty else np.nan
-    latest_rank_loser = player_matches_loser.sort_values(by='tourney_date', ascending=False)['loser_rank'].iloc[0] if not player_matches_loser.empty else np.nan
+    latest_rank_winner = np.nan
+    latest_rank_loser = np.nan
+    
+    if not player_matches_winner.empty and 'winner_rank' in player_matches_winner.columns:
+        try:
+            latest_rank_winner = player_matches_winner.sort_values(by='tourney_date', ascending=False)['winner_rank'].iloc[0]
+        except (KeyError, IndexError):
+            latest_rank_winner = np.nan
+    
+    if not player_matches_loser.empty and 'loser_rank' in player_matches_loser.columns:
+        try:
+            latest_rank_loser = player_matches_loser.sort_values(by='tourney_date', ascending=False)['loser_rank'].iloc[0]
+        except (KeyError, IndexError):
+            latest_rank_loser = np.nan
 
     if pd.isna(latest_rank_winner) and pd.isna(latest_rank_loser):
         return np.nan
@@ -56,6 +71,23 @@ def get_player_performance_metrics(player_name, df, num_recent_matches=10):
     Calculates various performance metrics for a given player from historical data.
     Returns a dictionary of average metrics.
     """
+    if df.empty:
+        return {
+            'avg_serve_points_won_pct': np.nan,
+            'avg_first_serve_pct': np.nan,
+            'avg_return_points_won_pct': np.nan,
+            'recent_win_percentage': np.nan
+        }
+    
+    # Check if required columns exist
+    if 'winner_name' not in df.columns or 'loser_name' not in df.columns:
+        return {
+            'avg_serve_points_won_pct': np.nan,
+            'avg_first_serve_pct': np.nan,
+            'avg_return_points_won_pct': np.nan,
+            'recent_win_percentage': np.nan
+        }
+    
     player_matches_winner = df[df['winner_name'] == player_name]
     player_matches_loser = df[df['loser_name'] == player_name]
 
@@ -69,7 +101,10 @@ def get_player_performance_metrics(player_name, df, num_recent_matches=10):
             'recent_win_percentage': np.nan
         }
 
-    player_matches = player_matches.sort_values(by='tourney_date', ascending=False)
+    # Sort by date if column exists
+    if 'tourney_date' in player_matches.columns:
+        player_matches = player_matches.sort_values(by='tourney_date', ascending=False)
+    
     recent_matches = player_matches.head(num_recent_matches)
 
     serve_points_won_pcts = []
@@ -79,21 +114,21 @@ def get_player_performance_metrics(player_name, df, num_recent_matches=10):
     for _, match in recent_matches.iterrows():
         if match['winner_name'] == player_name:
             # Player is the winner
-            total_serve_points = match['w_svpt']
-            serve_points_won = match['w_1stWon'] + match['w_2ndWon']
-            first_serves_in = match['w_1stIn']
+            total_serve_points = match.get('w_svpt', 0)
+            serve_points_won = match.get('w_1stWon', 0) + match.get('w_2ndWon', 0)
+            first_serves_in = match.get('w_1stIn', 0)
             
-            total_opponent_serve_points = match['l_svpt']
-            return_points_won = match['w_retPtsWon']
+            total_opponent_serve_points = match.get('l_svpt', 0)
+            return_points_won = match.get('w_retPtsWon', 0)
             
         else:
             # Player is the loser
-            total_serve_points = match['l_svpt']
-            serve_points_won = match['l_1stWon'] + match['l_2ndWon']
-            first_serves_in = match['l_1stIn']
+            total_serve_points = match.get('l_svpt', 0)
+            serve_points_won = match.get('l_1stWon', 0) + match.get('l_2ndWon', 0)
+            first_serves_in = match.get('l_1stIn', 0)
             
-            total_opponent_serve_points = match['w_svpt']
-            return_points_won = match['l_retPtsWon']
+            total_opponent_serve_points = match.get('w_svpt', 0)
+            return_points_won = match.get('l_retPtsWon', 0)
 
         # Calculate serve points won percentage
         if total_serve_points > 0:

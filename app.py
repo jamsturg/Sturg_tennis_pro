@@ -150,8 +150,12 @@ st.set_page_config(
 )
 
 # --- API Configuration ---
-# Use the provided API key directly
-API_KEY = "e2288482c983cc9b0b8f88e40eff7876"
+# Try to get API key from secrets, fallback to hardcoded value
+try:
+    API_KEY = st.secrets["api"]["odds_api_key"]
+except (KeyError, FileNotFoundError):
+    API_KEY = "e2288482c983cc9b0b8f88e40eff7876"  # Fallback hardcoded key
+
 BASE_URL = "https://api.the-odds-api.com"
 PLAYER_DATA_API_URL = "http://localhost:5000/api/player_features" # URL for the new Flask API
 
@@ -294,7 +298,8 @@ def prepare_features(player1_name, player2_name, player1_odds, player2_odds):
     try:
         response = requests.post(
             PLAYER_DATA_API_URL,
-            json={"player1_name": player1_name, "player2_name": player2_name}
+            json={"player1_name": player1_name, "player2_name": player2_name},
+            timeout=5  # 5 second timeout
         )
         response.raise_for_status() # Raise an exception for HTTP errors
         features_data = response.json()
@@ -312,16 +317,43 @@ def prepare_features(player1_name, player2_name, player1_odds, player2_odds):
         return features
 
     except requests.exceptions.ConnectionError:
-        st.error("❌ Could not connect to the Player Data API. Please ensure it is running (e.g., `python player_data_api.py`).")
-        # Fallback to placeholder values if API is not reachable
-        return np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        st.warning("⚠️ Player Data API is not running. Using simplified features based on odds.")
+        # Generate simple features based on odds when API is not available
+        return generate_features_from_odds(player1_name, player2_name, player1_odds, player2_odds)
     except requests.exceptions.RequestException as e:
-        st.error(f"❌ Error fetching player features from API: {e}")
-        # Fallback to placeholder values on other API errors
-        return np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        st.warning(f"⚠️ Error fetching player features from API: {e}. Using simplified features.")
+        return generate_features_from_odds(player1_name, player2_name, player1_odds, player2_odds)
     except Exception as e:
-        st.error(f"An unexpected error occurred during feature preparation: {e}")
-        return np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        st.warning(f"⚠️ Unexpected error during feature preparation: {e}. Using simplified features.")
+        return generate_features_from_odds(player1_name, player2_name, player1_odds, player2_odds)
+
+def generate_features_from_odds(player1_name, player2_name, player1_odds, player2_odds):
+    """Generate simple features based on odds when Player Data API is not available."""
+    # Calculate implied probabilities
+    prob1 = 1.0 / player1_odds if player1_odds > 0 else 0.5
+    prob2 = 1.0 / player2_odds if player2_odds > 0 else 0.5
+    
+    # Normalize probabilities
+    total_prob = prob1 + prob2
+    if total_prob > 0:
+        prob1 = prob1 / total_prob
+        prob2 = prob2 / total_prob
+    
+    # Generate features based on odds difference
+    odds_diff = player2_odds - player1_odds  # Positive if player1 is favored
+    prob_diff = prob1 - prob2  # Positive if player1 is favored
+    
+    # Create feature vector with some variation based on odds
+    features = np.array([[
+        prob_diff * 0.5,  # serve_strength_diff
+        -odds_diff * 0.1,  # ranking_diff (negative because lower odds = better rank)
+        prob_diff * 0.3,  # serve_percentage_diff
+        prob_diff * 0.4,  # recent_form_diff
+        prob_diff * 0.2,  # rally_performance_diff
+        0.0  # h2h_advantage (unknown)
+    ]])
+    
+    return features
 
 def convert_odds_to_probability(odds):
     """Converts decimal odds to implied probability.
