@@ -631,7 +631,7 @@ def convert_to_aest(utc_time_str):
         utc_time_str (str): UTC time string in ISO format (e.g., '2023-01-01T12:00:00Z')
         
     Returns:
-        str: Formatted datetime string in AEST timezone or None if conversion fails
+        datetime: Datetime object in AEST timezone or None if conversion fails
     """
     try:
         if not utc_time_str:
@@ -644,10 +644,10 @@ def convert_to_aest(utc_time_str):
             utc_time = datetime.fromisoformat(utc_time_str)
             
         aest_tz = pytz.timezone('Australia/Brisbane')
-        aest_time = utc_time.astimezone(aest_tz)
-        return aest_time.strftime('%Y-%m-%d %H:%M:%S %Z')
+        return utc_time.astimezone(aest_tz)
     except (ValueError, AttributeError, TypeError) as e:
         print(f"Error converting time: {e}")
+        return None
         return None
 
 def get_matches_with_autocomplete(odds_data):
