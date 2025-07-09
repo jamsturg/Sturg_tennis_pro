@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# Install dependencies using uv if available, otherwise fall back to pip
+if command -v uv &> /dev/null
+then
+    echo "📦 Installing dependencies with uv..."
+    uv pip install -r requirements.txt
+else
+    echo "📦 Installing dependencies with pip..."
+    pip install -r requirements.txt
+fi
+
 # Create .streamlit directory if it doesn't exist
 mkdir -p .streamlit
 
