@@ -263,8 +263,8 @@ tinysegmenter==0.3
 tldextract==5.3.0
 tokenizers==0.21.1
 toml==0.10.2
-torch==2.4.0+cpu
-torchvision==0.19.0+cpu
+torch==2.4.0
+torchvision==0.19.0
 tornado==6.5.1
 tqdm==4.67.1
 traitlets==5.14.3
