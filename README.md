@@ -222,6 +222,38 @@ odds_api_key = "your_api_key_here"
 streamlit run app.py
 ```
 
+### 🚀 Deploy on Replit
+
+[![Run on Replit](https://replit.com/badge/github/jamsturg/Sturg_tennis_pro)](https://replit.com/new/github/jamsturg/Sturg_tennis_pro)
+
+**Quick deployment steps:**
+
+1. **Import from GitHub:**
+   - Go to [replit.com](https://replit.com)
+   - Click "+ Create Repl" → "Import from GitHub"
+   - Enter repository URL: `jamsturg/Sturg_tennis_pro`
+   - Click "Import from GitHub"
+
+2. **Automatic Setup:**
+   - Replit will automatically detect the Nix environment
+   - Dependencies will be installed from `requirements.txt`
+   - The environment will be configured automatically
+
+3. **Configure API Key:**
+   - In the Replit editor, create `.streamlit/secrets.toml`
+   - Add your Odds API key:
+   ```toml
+   [api]
+   odds_api_key = "your_api_key_here"
+   ```
+
+4. **Run the Application:**
+   - Click the "Run" button in Replit
+   - The Streamlit app will start and be available at your Replit URL
+   - Share your repl URL with others for easy access
+
+**Note:** Get your free API key from [the-odds-api.com](https://the-odds-api.com/) before deployment.
+
 ## 📋 Project Structure
 
 ```
