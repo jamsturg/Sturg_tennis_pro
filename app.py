@@ -233,14 +233,30 @@ def process_odds_data(odds_json):
     for event in odds_json:
         event_id = event.get('id')
         sport_title = event.get('sport_title')
-        commence_time = datetime.fromisoformat(event['commence_time'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')
+        # Handle different time formats for commence_time
+        commence_time_str = event['commence_time']
+        if commence_time_str.endswith('Z'):
+            commence_time = datetime.fromisoformat(commence_time_str.replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')
+        elif 'UTC+00:00' in commence_time_str:
+            commence_time_str = commence_time_str.replace(' UTC+00:00', '+00:00')
+            commence_time = datetime.fromisoformat(commence_time_str).strftime('%Y-%m-%d %H:%M:%S UTC')
+        else:
+            commence_time = datetime.fromisoformat(commence_time_str).strftime('%Y-%m-%d %H:%M:%S UTC')
         home_team = event.get('home_team')
         away_team = event.get('away_team')
 
         for bookmaker in event.get('bookmakers', []):
             bookmaker_key = bookmaker.get('key')
             bookmaker_title = bookmaker.get('title')
-            last_update = datetime.fromisoformat(bookmaker['last_update'].replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')
+            # Handle different time formats for last_update
+            last_update_str = bookmaker['last_update']
+            if last_update_str.endswith('Z'):
+                last_update = datetime.fromisoformat(last_update_str.replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M:%S UTC')
+            elif 'UTC+00:00' in last_update_str:
+                last_update_str = last_update_str.replace(' UTC+00:00', '+00:00')
+                last_update = datetime.fromisoformat(last_update_str).strftime('%Y-%m-%d %H:%M:%S UTC')
+            else:
+                last_update = datetime.fromisoformat(last_update_str).strftime('%Y-%m-%d %H:%M:%S UTC')
 
             for market in bookmaker.get('markets', []):
                 market_key = market.get('key')
@@ -637,9 +653,17 @@ def convert_to_aest(utc_time_str):
         if not utc_time_str:
             return None
             
-        # Handle both 'Z' and '+00:00' timezone formats
+        # Handle different time formats
         if utc_time_str.endswith('Z'):
             utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+        elif 'UTC+00:00' in utc_time_str:
+            # Handle format like '2025-07-09 13:40:00 UTC+00:00'
+            utc_time_str = utc_time_str.replace(' UTC+00:00', '+00:00')
+            utc_time = datetime.fromisoformat(utc_time_str)
+        elif utc_time_str.endswith(' UTC'):
+            # Handle format like '2025-07-09 13:40:00 UTC'
+            utc_time_str = utc_time_str.replace(' UTC', '+00:00')
+            utc_time = datetime.fromisoformat(utc_time_str)
         else:
             utc_time = datetime.fromisoformat(utc_time_str)
             
@@ -647,7 +671,6 @@ def convert_to_aest(utc_time_str):
         return utc_time.astimezone(aest_tz)
     except (ValueError, AttributeError, TypeError) as e:
         print(f"Error converting time: {e}")
-        return None
         return None
 
 def get_matches_with_autocomplete(odds_data):
@@ -1023,7 +1046,7 @@ elif selection == '📊 Live Odds & Analysis':
                 if not odds_df.empty:
                     # Convert UTC to AEST in dataframe
                     odds_df['AEST Time'] = odds_df['Commence Time'].apply(
-                        lambda x: convert_to_aest(x + 'Z').strftime("%d/%m %I:%M%p") if convert_to_aest(x + 'Z') else x
+                        lambda x: convert_to_aest(x).strftime("%d/%m %I:%M%p") if convert_to_aest(x) else x
                     )
                     
                     # Interactive data table
